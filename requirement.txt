@@ -1,0 +1,8 @@
+streamlit
+openai
+requests
+urllib3
+Pillow
+pdfplumber
+python-docx
+numpy
