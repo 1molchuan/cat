@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import base64
 import io
@@ -612,7 +612,6 @@ def play_ai_voice(text):
         st.error(f"😿 语音播放失败: {str(e)}")
 
 # --- 联网搜索功能函数 ---
-def perform_web_search(query):
     """
     使用 Tavily API 进行联网搜索
     
@@ -624,40 +623,41 @@ def perform_web_search(query):
     """
     # Tavily API 配置（从全局变量读取，已在顶部从 secrets 加载）
     api_key = TAVILY_API_KEY
+def perform_web_search(query):
+    """
+    使用 Tavily API 进行联网搜索 (云端修正版 - 已移除代理)
+    """
+    # Tavily API 配置
+    api_key = TAVILY_API_KEY
     if not api_key:
         st.warning("⚠️ Tavily API Key 未配置，搜索功能将不可用。")
         return None
     url = "https://api.tavily.com/search"
     
-    # 构建请求体 (专门为 AI 优化的参数)
+    # 构建请求体
     payload = {
         "api_key": api_key,
         "query": query,
-        "search_depth": "basic",  # basic 速度快，advanced 更深入
+        "search_depth": "basic",
         "include_answer": True,
         "max_results": 5
     }
     
-    # 强制走 7897 端口代理
-    proxies = {
-        "http": "http://127.0.0.1:7897",
-        "https": "http://127.0.0.1:7897",
-    }
+    # ❌ 已删除 proxies 代理设置，云端直连
     
     try:
-        response = requests.post(url, json=payload, proxies=proxies, timeout=30)
+        # 直接发送请求，不带 proxies 参数
+        response = requests.post(url, json=payload, timeout=30)
         
         if response.status_code == 200:
             data = response.json()
             results = data.get("results", [])
-            
-            # 整理成 AI 易读的格式
             summary = ""
             for i, res in enumerate(results, 1):
                 summary += f"{i}. 【{res.get('title')}】\n{res.get('content')}\n\n"
             return summary if summary else None
         else:
-            print(f"❌ Tavily 搜索失败: {response.status_code} - {response.text}")
+            print(f"❌ Tavily 搜索失败: {response.status_code}")
             return None
             
     except Exception as e:
@@ -1251,7 +1251,7 @@ def analyze_intent(prompt):
     # === 2. AI 智能判决 (带超时控制) ===
     try:
         client = get_openai_client()
-        current_date = datetime.now().strftime("%Y-%m-%d")
+        current_date = (datetime.now() + timedelta(hours=8)).strftime("%Y-%m-%d")
         
         intent_prompt = f"""
 Current Date: {current_date}
@@ -1377,16 +1377,9 @@ def generate_image_prompt(user_prompt, search_context="", chat_history=""):
     except Exception as e:
         print(f"生成提示词失败: {e}")
         return "Cute fluffy cat, anime style, anatomically correct, perfect paws, soft lighting"
-
 def query_flux_image(prompt_text):
     """
-    调用 FLUX API 生成图片
-    
-    Args:
-        prompt_text: FLUX 的英文提示词
-    
-    Returns:
-        bytes: 图片的二进制数据，如果失败返回 None
+    调用 FLUX API 生成图片 (云端修正版 - 已移除代理)
     """
     if not prompt_text:
         return None
@@ -1399,27 +1392,23 @@ def query_flux_image(prompt_text):
         "inputs": prompt_text
     }
     
-    # 强制代理设置
-    proxies = {
-        "http": "http://127.0.0.1:7897",
-        "https": "http://127.0.0.1:7897",
-    }
+    # ❌ 已删除 proxies 代理设置
     
     max_retries = 3
-    retry_delay = 5  # 秒
+    retry_delay = 5
     
     for attempt in range(max_retries):
         try:
+            # 直接发送请求，不带 proxies 参数
             response = requests.post(
                 HF_API_URL,
                 headers=headers,
                 json=payload,
-                proxies=proxies,
-                verify=False,  # 关闭 SSL 验证
-                timeout=30     # 超时设置
+                # proxies=proxies, <--- 这一行被删除了
+                verify=True,   # 云端环境通常可以开启 SSL 验证
+                timeout=30
             )
             
-            # 如果返回 503，说明模型正在加载，等待后重试
             if response.status_code == 503:
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay)
@@ -1428,11 +1417,9 @@ def query_flux_image(prompt_text):
                     st.warning("🔄 模型正在加载中，请稍后再试喵~")
                     return None
             
-            # 如果成功，返回图片数据
             if response.status_code == 200:
                 return response.content
             
-            # 其他错误
             st.error(f"😿 FLUX API 错误：{response.status_code} - {response.text}")
             return None
             
@@ -1612,7 +1599,7 @@ with st.sidebar:
     # 初始化统计信息
     if "chat_stats" not in st.session_state:
         st.session_state.chat_stats = {
-            "start_time": datetime.now(),
+            "start_time": (datetime.now() + timedelta(hours=8)),
             "user_messages": 0,
             "assistant_messages": 0,
             "total_chars": 0
@@ -1639,7 +1626,7 @@ with st.sidebar:
     st.metric("💬 对话数", f"{total_msgs} 条")
     
     # 聊天时长
-    duration = datetime.now() - st.session_state.chat_stats["start_time"]
+    duration = (datetime.now() + timedelta(hours=8)) - st.session_state.chat_stats["start_time"]
     minutes = int(duration.total_seconds() / 60)
     st.metric("⏱️ 聊天时长", f"{minutes} 分钟")
     
@@ -1718,18 +1705,18 @@ with st.sidebar:
         st.session_state.messages.append({
             "role": "assistant", 
             "content": random.choice(initial_greetings),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": (datetime.now() + timedelta(hours=8)).isoformat()
         })
         st.session_state.chat_stats["user_messages"] = 0
         st.session_state.chat_stats["assistant_messages"] = 0
         st.session_state.chat_stats["total_chars"] = 0
-        st.session_state.chat_stats["start_time"] = datetime.now()
+        st.session_state.chat_stats["start_time"] = (datetime.now() + timedelta(hours=8))
         st.rerun()
     
     if st.button("💾 导出对话", use_container_width=True):
         if len(st.session_state.messages) > 1:
             export_text = f"# 小喵对话记录\n\n"
-            export_text += f"导出时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            export_text += f"导出时间: {(datetime.now() + timedelta(hours=8)).strftime('%Y-%m-%d %H:%M:%S')}\n"
             export_text += f"对话总数: {st.session_state.chat_stats['user_messages'] + st.session_state.chat_stats['assistant_messages']} 条\n\n"
             export_text += "---\n\n"
             
@@ -1741,7 +1728,7 @@ with st.sidebar:
             st.download_button(
                 label="📥 下载对话记录",
                 data=export_text,
-                file_name=f"小喵对话记录_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                file_name=f"小喵对话记录_{(datetime.now() + timedelta(hours=8)).strftime('%Y%m%d_%H%M%S')}.md",
                 mime="text/markdown"
             )
             st.success("✨ 对话记录已准备好，点击下载按钮保存喵~")
@@ -1789,7 +1776,7 @@ with st.sidebar:
         total_msgs = st.session_state.chat_stats['user_messages'] + st.session_state.chat_stats['assistant_messages']
         st.metric("📝 总对话数", f"{total_msgs} 条")
         st.metric("📄 总字符数", f"{st.session_state.chat_stats['total_chars']:,}")
-        duration = datetime.now() - st.session_state.chat_stats["start_time"]
+        duration = (datetime.now() + timedelta(hours=8)) - st.session_state.chat_stats["start_time"]
         hours = int(duration.total_seconds() / 3600)
         minutes = int((duration.total_seconds() % 3600) / 60)
         if hours > 0:
@@ -1893,7 +1880,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
     
     # === 伪主动性逻辑：根据时间生成欢迎语 ===
-    now = datetime.now()
+    now = (datetime.now() + timedelta(hours=8))
     current_hour = now.hour
     
     # 1. 定义时间段上下文
@@ -1932,7 +1919,7 @@ if "messages" not in st.session_state:
     st.session_state.messages.append({
         "role": "assistant", 
         "content": welcome_msg,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": (datetime.now() + timedelta(hours=8)).isoformat()
     })
 
 # 聊天消息显示区域 - 微信风格
@@ -1942,12 +1929,12 @@ with chat_container:
     for i, message in enumerate(st.session_state.messages):
         if message["role"] != "system":
             # 获取消息时间
-            msg_time = message.get("timestamp", datetime.now())
+            msg_time = message.get("timestamp", (datetime.now() + timedelta(hours=8)))
             if isinstance(msg_time, str):
                 try:
                     msg_time = datetime.fromisoformat(msg_time)
                 except:
-                    msg_time = datetime.now()
+                    msg_time = (datetime.now() + timedelta(hours=8))
             
             # 判断是否需要显示时间戳（间隔超过5分钟或第一条消息）
             show_timestamp = False
@@ -2086,7 +2073,7 @@ if prompt:
     st.session_state.messages.append({
         "role": "user", 
         "content": prompt,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": (datetime.now() + timedelta(hours=8)).isoformat()
     })
     
     # 2. 【关键修复】立即在界面上渲染这条消息
@@ -2192,7 +2179,7 @@ if prompt:
                     st.session_state.messages.append({
                         "role": "assistant",
                         "content": pro_summary,
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": (datetime.now() + timedelta(hours=8)).isoformat()
                     })
                     st.session_state.chat_stats["assistant_messages"] += 1
                     st.session_state.chat_stats["total_chars"] += len(pro_summary)
@@ -2234,7 +2221,7 @@ if prompt:
                     st.session_state.messages.append({
                         "role": "assistant",
                         "content": "😿 对不起，小喵没能生成提示词，请再试一次喵~",
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": (datetime.now() + timedelta(hours=8)).isoformat()
                     })
                     st.session_state.chat_stats["assistant_messages"] += 1
                     
@@ -2274,7 +2261,7 @@ if prompt:
                                 "role": "assistant",
                                 "content": image_url,  # 这里存图片的 URL 或 base64 数据
                                 "type": "image",       # 标记这是图片
-                                "timestamp": datetime.now().isoformat()
+                                "timestamp": (datetime.now() + timedelta(hours=8)).isoformat()
                             })
                             
                             # 【新增】追加一条助手的文本回复，作为图片的"配文"
@@ -2287,7 +2274,7 @@ if prompt:
                             st.session_state.messages.append({
                                 "role": "assistant",
                                 "content": reply_text,
-                                "timestamp": datetime.now().isoformat()
+                                "timestamp": (datetime.now() + timedelta(hours=8)).isoformat()
                             })
                             
                             # 更新统计
@@ -2303,7 +2290,7 @@ if prompt:
                             st.session_state.messages.append({
                                 "role": "assistant",
                                 "content": error_reply,
-                                "timestamp": datetime.now().isoformat()
+                                "timestamp": (datetime.now() + timedelta(hours=8)).isoformat()
                             })
                             st.session_state.chat_stats["assistant_messages"] += 1
                             
@@ -2316,7 +2303,7 @@ if prompt:
                         st.session_state.messages.append({
                             "role": "assistant",
                             "content": error_reply,
-                            "timestamp": datetime.now().isoformat()
+                            "timestamp": (datetime.now() + timedelta(hours=8)).isoformat()
                         })
                         st.session_state.chat_stats["assistant_messages"] += 1
                         
@@ -2328,7 +2315,7 @@ if prompt:
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": error_reply,
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": (datetime.now() + timedelta(hours=8)).isoformat()
                 })
                 st.session_state.chat_stats["assistant_messages"] += 1
                 
@@ -2359,7 +2346,7 @@ if prompt:
         st.session_state.messages.append({
             "role": "assistant",
             "content": explain_msg,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": (datetime.now() + timedelta(hours=8)).isoformat()
         })
         st.session_state.chat_stats["assistant_messages"] += 1
         st.session_state.chat_stats["total_chars"] += len(explain_msg)
@@ -2561,7 +2548,7 @@ if prompt:
                 st.session_state.messages.append({
                     "role": "assistant", 
                     "content": full_res,
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": (datetime.now() + timedelta(hours=8)).isoformat()
                 })
                 
                 # 更新统计信息
@@ -2601,4 +2588,5 @@ if prompt:
 
 # --- 底部信息 ---
 st.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
+
 st.caption("<div style='text-align: center; opacity: 0.6;'>💖 Powered by SJTU Model Service | v2025.12.25</div>", unsafe_allow_html=True)
