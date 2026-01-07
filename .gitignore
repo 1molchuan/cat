@@ -1,0 +1,27 @@
+# --- 1. Python 编译文件 (垃圾文件) ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- 2. Streamlit 敏感配置 (绝对不能上传) ---
+# 这是一个文件夹里的特定文件，专门存 Key 的
+.streamlit/secrets.toml
+
+# --- 3. 巨大的虚拟环境文件夹 (看你的截图里有这个) ---
+# WinPython 环境，几百兆甚至上 G，传上去 GitHub 会炸
+WPy64-310111/
+# 其他常见的虚拟环境名字
+venv/
+env/
+.venv/
+
+# --- 4. 操作系统生成的垃圾文件 ---
+.DS_Store
+Thumbs.db
+
+# --- 5. 编辑器配置 (个人偏好，不需要共享) ---
+.vscode/
+.idea/
+
+# --- 6. 本地运行脚本 (可选) ---
+*.bat
